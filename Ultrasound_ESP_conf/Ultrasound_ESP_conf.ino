@@ -1,5 +1,6 @@
 #include <WiFi.h>
 #include <HTTPClient.h>
+#include "base64.h" // Install "Base64" by Adam Rudd from Library Manager
 
 const char* ssid = "KaushikPhone";
 const char* password = "Wifewifi@1";
@@ -44,7 +45,38 @@ float getUltrasoundReading(){
 }
 
 String getImage(){
-    // shreyas's job
+    Serial2.begin(115200, SERIAL_8N1, 16, 17);  // RX=16, TX=17 (adjust as needed)
+      Serial2.println("CAPTURE");
+    
+      // Wait for image start
+      while (Serial2.available()) {
+        String header = Serial2.readStringUntil('\n');
+        if (header.indexOf("IMG_START") >= 0) break;
+      }
+    
+      uint8_t imageBuffer[30000];  // max image size ~30KB
+      int index = 0;
+    
+      unsigned long startTime = millis();
+      while (millis() - startTime < 3000) { // timeout after 3 seconds
+        if (Serial2.available()) {
+          uint8_t b = Serial2.read();
+          if (b == 'I') {
+            // peek to check for IMG_END
+            if (Serial2.peek() == 'M') {
+              String tail = Serial2.readStringUntil('\n');
+              if (tail.indexOf("IMG_END") >= 0) break;
+            }
+          }
+          if (index < sizeof(imageBuffer)) {
+            imageBuffer[index++] = b;
+          }
+        }
+      }
+    
+      // Base64 encode image
+      String imageBase64 = base64::encode(imageBuffer, index);
+      return "\"" + imageBase64 + "\"";  // return as a JSON string (quoted)
 }
 
 String checkAlignment(float reading){
