@@ -1,23 +1,32 @@
+import base64
 import json
 import os
 from datetime import datetime
+from io import BytesIO
 
 import requests
-from fastapi import FastAPI, HTTPException, Request
-from pydantic import BaseModel
-from pymongo import MongoClient
 
 # sensitive Info like URI...
 import sensitiveInfo
+from bson import json_util
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
+from landingai.predict import Predictor
+from PIL import Image
+from pydantic import BaseModel
+from pymongo import MongoClient
+from starlette.types import Lifespan
 
-# to initiate subscriber:
-# ╰─❯ curl -X POST http://localhost:5089/\~/in-cse/in-name/UltrasoundData \                                                                            ─╯
+# manullay type this in do not copy
+# curl -X POST \
+#   http://localhost:5089/\~/in-cse/in-name/UltrasoundData \
 #   -H "X-M2M-Origin: admin:admin" \
 #   -H "Content-Type: application/vnd.onem2m-res+json; ty=23" \
 #   -d '{
 #     "m2m:sub": {
 #       "rn": "subFastAPI",
-#       "nu": ["http://127.0.0.1:8000/notify"],
+#       "nu": ["http://localhost:8000/notify"],
 #       "nct": 2
 #     }
 #   }'
@@ -36,28 +45,7 @@ except Exception as e:
 
 # FastAPI app
 app = FastAPI()
-
-
-# Data Model
-class TrackData(BaseModel):
-    track_id: str
-    time: datetime
-    ultrasound_reading: float
-    temperature: float
-    speed: float
-    track_condition: str
-
-
-# Endpoint
-@app.post("/push-data/")
-async def push_data(data: TrackData):
-    try:
-        result = collection.insert_one(data.model_dump())
-        print("✅ Inserted Document ID:", result.inserted_id)
-        return {"status": "success", "data": data}
-    except Exception as e:
-        print("❌ Insert Error:", str(e))
-        raise HTTPException(status_code=500, detail=str(e))
+templates = Jinja2Templates(directory="templates")
 
 
 # updating mongo based on OM2M
@@ -70,8 +58,34 @@ async def notify(request: Request):
         con_raw = body["m2m:sgn"]["m2m:nev"]["m2m:rep"]["m2m:cin"]["con"]
         sensor_data = json.loads(con_raw)
 
-        if sensor_data["track_condition"] == "Defective":
-            notifyDefective("Defective")
+        # ----------- JSON LOOK ----------------
+        # track_id
+        # time
+        # ultrasound_reading_1
+        # ultrasound_reading_2
+        # image_encoding
+        # alignment
+        # temperature
+
+        # decode the image from the encoding
+        # encoded = sensor_data["image_encoding"]
+        # image_data = base64.b64decode(encoded)
+
+        # create a Pillow image
+        # image = Image.open(BytesIO(image_data))
+
+        # api call to landing lens to get final verdict
+        # predictor = Predictor(sensitiveInfo.ENDPOINT_ID, api_key=sensitiveInfo.API_KEY)
+        # predictions = predictor.predict(image)
+        # print(predictions)
+        # ouput format: LIST: [ClassificationPrediction(score=0.9980272650718689, label_name='Defective', label_index=0)]
+        # condition = predictions[0].label_name
+        condition = "Non Defective"
+        # then determine and modify the dict s.t. it includes everything
+        sensor_data["condition"] = condition
+        # check if defective then inform the respective container
+        if condition == "Defective":
+            notifyDefective(condition)
 
         collection.insert_one(sensor_data)
 
@@ -104,3 +118,21 @@ def notifyDefective(condition: str):
 
     print("Status Code:", response.status_code)
     print("Response:", response.text)
+
+
+@app.get("/", response_class=HTMLResponse)
+async def read_entries(request: Request):
+    # Fetch all entries
+    entries = list(collection.find())
+
+    # Group entries by track_id
+    grouped_data = {}
+    for entry in entries:
+        track_id = entry.get("track_id", "Unknown")
+        if track_id not in grouped_data:
+            grouped_data[track_id] = []
+        grouped_data[track_id].append(entry)
+
+    return templates.TemplateResponse(
+        "index.html", {"request": request, "data": grouped_data}
+    )

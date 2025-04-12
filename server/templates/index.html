@@ -1,86 +1,107 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Track Images</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 20px;
-            background-color: #f5f5f5;
-        }
-        .container {
-            max-width: 800px;
-            margin: auto;
-            background: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
-        }
-        .entry {
-            border-bottom: 1px solid #ddd;
-            padding: 10px;
-            margin-bottom: 10px;
-        }
-        img {
-            width: 100%;
-            max-width: 300px;
-            height: auto;
-            border-radius: 5px;
-            margin-top: 10px;
-        }
-        .hidden {
-            display: none;
-        }
-        .toggle-btn {
-            background-color: #007BFF;
-            color: white;
-            padding: 5px 10px;
-            border: none;
-            cursor: pointer;
-            border-radius: 5px;
-        }
-    </style>
-</head>
-<body>
-
-<div class="container">
-    <h2>Track Information</h2>
-    <div id="data-container"></div>
-</div>
-
-<script>
-    document.addEventListener("DOMContentLoaded", function() {
-        fetch('/get_data')
-            .then(response => response.json())
-            .then(data => {
-                const container = document.getElementById("data-container");
-                data.forEach(entry => {
-                    const div = document.createElement("div");
-                    div.classList.add("entry");
-
-                    div.innerHTML = `
-                        <p><strong>Route:</strong> ${entry.Route}</p>
-                        <p><strong>Time Taken:</strong> ${entry.TimeTake}</p>
-                        <p><strong>Accelerometer:</strong> ${entry.Accelerometer}</p>
-                        <p><strong>Temperature:</strong> ${entry.Temperature}</p>
-                        <button class="toggle-btn" onclick="toggleImage('${entry.id}')">Show Image</button>
-                        <div id="image-${entry.id}" class="hidden">
-                            <img src="/image/${entry.id}" alt="Track Image">
-                        </div>
-                    `;
-                    container.appendChild(div);
-                });
-            })
-            .catch(error => console.error("Error fetching data:", error));
-    });
-
-    function toggleImage(id) {
-        const imgDiv = document.getElementById(`image-${id}`);
-        imgDiv.classList.toggle("hidden");
-    }
-</script>
-
-</body>
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Track Monitoring Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+      };
+    </script>
+  </head>
+  <body class="bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-100">
+    <div class="max-w-6xl mx-auto px-4 py-8">
+      <div class="flex justify-between items-center mb-6">
+        <h1 class="text-3xl font-bold text-center w-full">
+          Track Monitoring Dashboard
+        </h1>
+        <button
+          onclick="document.documentElement.classList.toggle('dark')"
+          class="absolute right-6 top-6 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 focus:outline-none"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            class="h-5 w-5"
+            viewBox="0 0 20 20"
+            fill="currentColor"
+          >
+            <path
+              d="M10 2a8 8 0 108 8 8.01 8.01 0 00-8-8zm0 14a6 6 0 116-6 6.01 6.01 0 01-6 6z"
+            />
+          </svg>
+        </button>
+      </div>
+      {% for track_id, entries in data.items() %}
+      <details class="mb-4 bg-white dark:bg-gray-800 shadow rounded-lg">
+        <summary
+          class="cursor-pointer px-6 py-4 font-semibold text-lg bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded-t-lg"
+        >
+          Track ID: {{ track_id }}
+        </summary>
+        <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
+          {% for entry in entries %}
+          <div
+            class="bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg shadow p-4"
+          >
+            <p>
+              <span class="font-semibold text-gray-600 dark:text-gray-300"
+                >Time:</span
+              >
+              {{ entry.time }}
+            </p>
+            <p>
+              <span class="font-semibold text-gray-600 dark:text-gray-300"
+                >Ultrasound 1:</span
+              >
+              {{ entry.ultrasound_reading_1 }}
+            </p>
+            <p>
+              <span class="font-semibold text-gray-600 dark:text-gray-300"
+                >Ultrasound 2:</span
+              >
+              {{ entry.ultrasound_reading_2 }}
+            </p>
+            <p>
+              <span class="font-semibold text-gray-600 dark:text-gray-300"
+                >Temperature:</span
+              >
+              {{ entry.temperature }}
+            </p>
+            <p>
+              <span class="font-semibold text-gray-600 dark:text-gray-300"
+                >Image:</span
+              >
+              <span class="truncate inline-block max-w-xs"
+                >{{ entry.image_encoding[:20] }}...</span
+              >
+            </p>
+            <p>
+              <span class="font-semibold text-gray-600 dark:text-gray-300"
+                >Condition:</span
+              >
+              <span
+                class="font-bold {{ 'text-green-600 dark:text-green-400' if entry.condition == 'Not-Defective' else 'text-red-600 dark:text-red-400' }}"
+              >
+                {{ entry.condition }}
+              </span>
+            </p>
+            <p>
+              <span class="font-semibold text-gray-600 dark:text-gray-300"
+                >Alignment:</span
+              >
+              <span
+                class="font-bold {{ 'text-green-600 dark:text-green-400' if entry.alignment == 'good' else 'text-red-600 dark:text-red-400' }}"
+              >
+                {{ entry.alignment }}
+              </span>
+            </p>
+          </div>
+          {% endfor %}
+        </div>
+      </details>
+      {% endfor %}
+    </div>
+  </body>
 </html>
