@@ -48,6 +48,7 @@ String getImage(){
 }
 
 String checkAlignment(float reading){
+// Shreyas, try to figure out the correct threshold
     float threshold = 5;
     if(reading<threshold){
         notifyImmediately();
