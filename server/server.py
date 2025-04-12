@@ -5,9 +5,6 @@ from datetime import datetime
 from io import BytesIO
 
 import requests
-
-# sensitive Info like URI...
-import sensitiveInfo
 from bson import json_util
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
@@ -17,6 +14,9 @@ from PIL import Image
 from pydantic import BaseModel
 from pymongo import MongoClient
 from starlette.types import Lifespan
+
+# sensitive Info like URI...
+import sensitiveInfo
 
 # manullay type this in do not copy
 # curl -X POST \
@@ -80,7 +80,7 @@ async def notify(request: Request):
         # print(predictions)
         # ouput format: LIST: [ClassificationPrediction(score=0.9980272650718689, label_name='Defective', label_index=0)]
         # condition = predictions[0].label_name
-        condition = "Non Defective"
+        condition = "Defective"
         # then determine and modify the dict s.t. it includes everything
         sensor_data["condition"] = condition
         # check if defective then inform the respective container
