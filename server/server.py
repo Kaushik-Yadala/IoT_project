@@ -68,19 +68,18 @@ async def notify(request: Request):
         # temperature
 
         # decode the image from the encoding
-        # encoded = sensor_data["image_encoding"]
-        # image_data = base64.b64decode(encoded)
+        encoded = sensor_data["image_encoding"]
+        image_data = base64.b64decode(encoded)
 
         # create a Pillow image
-        # image = Image.open(BytesIO(image_data))
+        image = Image.open(BytesIO(image_data))
 
         # api call to landing lens to get final verdict
-        # predictor = Predictor(sensitiveInfo.ENDPOINT_ID, api_key=sensitiveInfo.API_KEY)
-        # predictions = predictor.predict(image)
-        # print(predictions)
+        predictor = Predictor(sensitiveInfo.ENDPOINT_ID, api_key=sensitiveInfo.API_KEY)
+        predictions = predictor.predict(image)
+        print(predictions)
         # ouput format: LIST: [ClassificationPrediction(score=0.9980272650718689, label_name='Defective', label_index=0)]
-        # condition = predictions[0].label_name
-        condition = "Defective"
+        condition = predictions[0].label_name
         # then determine and modify the dict s.t. it includes everything
         sensor_data["condition"] = condition
         # check if defective then inform the respective container
@@ -134,5 +133,5 @@ async def read_entries(request: Request):
         grouped_data[track_id].append(entry)
 
     return templates.TemplateResponse(
-        "index.html", {"request": request, "data": grouped_data}
+        "modified.html", {"request": request, "data": grouped_data}
     )

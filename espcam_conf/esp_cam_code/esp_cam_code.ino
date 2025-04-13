@@ -19,7 +19,9 @@
 #define PCLK_GPIO_NUM    22
 
 void setup() {
-  Serial.begin(115200);
+  Serial.begin(115200);            // For debug
+  Serial2.begin(115200, SERIAL_8N1, 15, 13);  // RX=15, TX=13 — change if needed
+
   
   camera_config_t config;
   config.ledc_channel = LEDC_CHANNEL_0;
@@ -55,8 +57,8 @@ void setup() {
 }
 
 void loop() {
-  if (Serial.available()) {
-    String command = Serial.readStringUntil('\n');
+  if (Serial2.available()) {
+    String command = Serial2.readStringUntil('\n');
     if (command == "CAPTURE") {
       camera_fb_t* fb = esp_camera_fb_get();
       if (!fb) {
@@ -64,13 +66,14 @@ void loop() {
         return;
       }
 
-      Serial.println("IMG_START");
+      Serial2.println("IMG_START");
       for (size_t i = 0; i < fb->len; i++) {
-        Serial.write(fb->buf[i]);
+        Serial2.write(fb->buf[i]);
       }
-      Serial.println("IMG_END");
+      Serial2.println("IMG_END");
 
       esp_camera_fb_return(fb);
     }
   }
 }
+

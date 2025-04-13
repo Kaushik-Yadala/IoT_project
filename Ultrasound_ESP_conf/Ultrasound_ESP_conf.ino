@@ -30,7 +30,7 @@ void setup() {
   // sendDataToOM2M();
 
   String json = buildJson();
-  print(json);
+  Serial.println(json);
 }
 
 float getUltrasoundReading(){
@@ -38,7 +38,7 @@ float getUltrasoundReading(){
   delayMicroseconds(10);
   digitalWrite(trigger, LOW);
   float duration = pulseIn(echo, HIGH);
-  float distance = .5*speed*duration;
+  float distance = 0.343*duration/2;
   Serial.println(distance);
   return distance;
 
@@ -76,6 +76,7 @@ String getImage(){
     
       // Base64 encode image
       String imageBase64 = base64::encode(imageBuffer, index);
+      // String imageBase64 = "hi";
       return "\"" + imageBase64 + "\"";  // return as a JSON string (quoted)
 }
 
@@ -83,7 +84,7 @@ String checkAlignment(float reading){
 // Shreyas, try to figure out the correct threshold
     float threshold = 5;
     if(reading<threshold){
-        notifyImmediately();
+        // notifyImmediately();
         return "Bad";
     }else{
         return "Good";
