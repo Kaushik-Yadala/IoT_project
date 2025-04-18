@@ -4,7 +4,11 @@ import os
 from datetime import datetime
 from io import BytesIO
 
+import httpx
+import matplotlib.pyplot as plt
+import pandas as pd
 import requests
+import seaborn as sns
 from bson import json_util
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
@@ -47,6 +51,52 @@ except Exception as e:
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
 
+OM2M_URL = "http://localhost:5089/~/in-cse/in-name/UltrasoundData"
+NOTIFY_URL = "http://localhost:8000/notify"
+SUBSCRIPTION_NAME = "subFastAPI"
+
+
+@app.on_event("startup")
+async def subscribe_to_om2m():
+    headers = {
+        "X-M2M-Origin": "admin:admin",
+        "Content-Type": "application/vnd.onem2m-res+json; ty=23",  # <-- match curl
+        "Accept": "application/json",
+    }
+
+    payload = {"m2m:sub": {"rn": SUBSCRIPTION_NAME, "nu": [NOTIFY_URL], "nct": 2}}
+
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.post(OM2M_URL, headers=headers, json=payload)
+            print("[SUBSCRIBE] Status:", response.status_code)
+            print("[SUBSCRIBE] Response:", response.text)
+        except Exception as e:
+            print("[ERROR] Subscription failed:", str(e))
+
+
+# @app.on_event("startup")
+# def subscribe_to_om2m():
+#     url = "http://localhost:5089/~/in-cse/in-name/UltrasoundData"
+#     headers = {
+#         "X-M2M-Origin": "admin:admin",
+#         "Content-Type": "application/vnd.onem2m-res+json; ty=23",
+#     }
+#     payload = {
+#         "m2m:sub": {
+#             "rn": "subFastAPI",
+#             "nu": ["http://localhost:8000/notify"],
+#             "nct": 2,
+#         }
+#     }
+#
+#     try:
+#         response = requests.post(url, headers=headers, data=json.dumps(payload))
+#         print("OM2M Subscription Response:", response.status_code)
+#         print("Response Body:", response.text)
+#     except Exception as e:
+#         print("Failed to subscribe to OM2M:", e)
+
 
 # updating mongo based on OM2M
 @app.post("/notify")
@@ -80,9 +130,12 @@ async def notify(request: Request):
         print(predictions)
         # ouput format: LIST: [ClassificationPrediction(score=0.9980272650718689, label_name='Defective', label_index=0)]
         condition = predictions[0].label_name
+        score = round(predictions[0].score, 2)
         # then determine and modify the dict s.t. it includes everything
         sensor_data["condition"] = condition
+        sensor_data["Image_score"] = score
         # check if defective then inform the respective container
+
         if condition == "Defective":
             notifyDefective(condition)
 
@@ -121,10 +174,46 @@ def notifyDefective(condition: str):
 
 @app.get("/", response_class=HTMLResponse)
 async def read_entries(request: Request):
-    # Fetch all entries
-    entries = list(collection.find())
+    query = {}
 
-    # Group entries by track_id
+    # Date Filter
+    date_str = request.query_params.get("date")
+    if date_str:
+        try:
+            query["date"] = datetime.strptime(date_str, "%Y-%m-%d").strftime("%Y-%m-%d")
+        except ValueError:
+            pass
+
+    # Condition Filter
+    condition = request.query_params.get("condition")
+    if condition:
+        query["condition"] = condition
+
+    # Alignment Filter
+    alignment = request.query_params.get("alignment")
+    if alignment:
+        query["alignment"] = alignment
+
+    # Ultrasound Min Filter
+    ultrasound_min = request.query_params.get("ultrasound_min")
+    if ultrasound_min:
+        try:
+            query["ultrasound_reading_1"] = {
+                "$gte": float(ultrasound_min)
+            }  # Filter by minimum value
+        except ValueError:
+            pass
+
+    # Score Min Filter
+    score_min = request.query_params.get("score_min")
+    if score_min:
+        try:
+            query["Image_score"] = {"$gte": float(score_min)}  # Filter by minimum score
+        except ValueError:
+            pass
+
+    entries = list(collection.find(query))
+
     grouped_data = {}
     for entry in entries:
         track_id = entry.get("track_id", "Unknown")
@@ -134,4 +223,56 @@ async def read_entries(request: Request):
 
     return templates.TemplateResponse(
         "modified.html", {"request": request, "data": grouped_data}
+    )
+
+
+@app.get("/analytics", response_class=HTMLResponse)
+async def analytics(request: Request):
+    entries = list(collection.find({}))
+
+    # Convert MongoDB entries to DataFrame
+    df = pd.DataFrame(entries)
+    df["ultrasound_reading_1"] = pd.to_numeric(
+        df["ultrasound_reading_1"], errors="coerce"
+    )
+    df["Image_score"] = pd.to_numeric(df["Image_score"], errors="coerce")
+    df.dropna(subset=["ultrasound_reading_1", "Image_score"], inplace=True)
+
+    # Generate plots
+    plots = []
+
+    def plot_to_base64(fig):
+        buf = BytesIO()
+        fig.savefig(buf, format="png", bbox_inches="tight")
+        buf.seek(0)
+        encoded = base64.b64encode(buf.read()).decode("utf-8")
+        plt.close(fig)
+        return encoded
+
+    # 1. Condition vs Score
+    fig1, ax1 = plt.subplots()
+    sns.barplot(data=df, x="condition", y="Image_score", ax=ax1)
+    ax1.set_title("Condition vs. Image Score")
+    plots.append(plot_to_base64(fig1))
+
+    # 2. Condition vs Ultrasound
+    fig2, ax2 = plt.subplots()
+    sns.barplot(data=df, x="condition", y="ultrasound_reading_1", ax=ax2)
+    ax2.set_title("Condition vs. Ultrasound")
+    plots.append(plot_to_base64(fig2))
+
+    # 3. Alignment vs Ultrasound
+    fig3, ax3 = plt.subplots()
+    sns.barplot(data=df, x="alignment", y="ultrasound_reading_1", ax=ax3)
+    ax3.set_title("Alignment vs. Ultrasound")
+    plots.append(plot_to_base64(fig3))
+
+    # 4. Extra: Image Score vs Ultrasound
+    fig4, ax4 = plt.subplots()
+    sns.regplot(data=df, x="Image_score", y="ultrasound_reading_1", ax=ax4)
+    ax4.set_title("Score vs. Ultrasound")
+    plots.append(plot_to_base64(fig4))
+
+    return templates.TemplateResponse(
+        "analytics.html", {"request": request, "plots": plots}
     )
