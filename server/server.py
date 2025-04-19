@@ -4,6 +4,7 @@ import os
 from datetime import datetime
 from io import BytesIO
 
+import certifi
 import httpx
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -46,6 +47,17 @@ try:
 except Exception as e:
     print("❌ MongoDB Connection Error:", e)
     raise
+
+# try:
+#     client = MongoClient(sensitiveInfo.MONGO_URI, tlsCAFile=certifi.where())
+#     db = client[sensitiveInfo.DB_NAME]
+#     collection = db[sensitiveInfo.COLLECTION_NAME]
+#     print("✅ Connected to MongoDB Atlas")
+#     print("📁 DB:", db.name)
+#     print("📂 Collection:", collection.name)
+# except Exception as e:
+#     print("❌ MongoDB Connection Error:", e)
+#     raise
 
 # FastAPI app
 app = FastAPI()
@@ -255,10 +267,20 @@ async def analytics(request: Request):
     ax1.set_title("Condition vs. Image Score")
     plots.append(plot_to_base64(fig1))
 
-    # 2. Condition vs Ultrasound
+    # Remove outliers with ultrasound reading > 10
+    filtered_df = df[df["ultrasound_reading_1"] <= 10]
+
+    # 2. Condition vs Ultrasound (Scatter Plot with Legend)
     fig2, ax2 = plt.subplots()
-    sns.barplot(data=df, x="condition", y="ultrasound_reading_1", ax=ax2)
+    sns.scatterplot(
+        data=filtered_df,
+        x="condition",
+        y="ultrasound_reading_1",
+        hue="condition",
+        ax=ax2,
+    )
     ax2.set_title("Condition vs. Ultrasound")
+    ax2.legend(title="Condition")
     plots.append(plot_to_base64(fig2))
 
     # 3. Alignment vs Ultrasound

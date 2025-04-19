@@ -149,7 +149,7 @@ void sendDataToOM2M(float distance, String encoding) {
     http.addHeader("X-M2M-RI", "esp32Req001");
     http.addHeader("Content-Type", "application/vnd.onem2m-res+json; ty=4");
 
-    String track_id = "T" + String(998);
+    String track_id = "T" + String(1000);
 
     // Get time since ESP started (uptime)
     unsigned long seconds = millis() / 1000;
